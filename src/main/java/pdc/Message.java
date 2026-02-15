@@ -172,15 +172,40 @@ public class Message {
 
     /**
      * Helper method to read a complete message from a socket.
-     * Handles TCP stream boundaries by reading the length prefix first.
+     * Handles TCP stream boundaries and fragmentation by reading the length prefix first.
      */
     public static Message readFromSocket(DataInputStream dis) throws IOException {
-        // Read total message length
-        int totalLength = dis.readInt();
+        // Read total message length (4 bytes) - handle fragmentation
+        byte[] lengthBytes = new byte[4];
+        int bytesRead = 0;
+        while (bytesRead < 4) {
+            int count = dis.read(lengthBytes, bytesRead, 4 - bytesRead);
+            if (count == -1) {
+                throw new IOException("Stream closed while reading message length");
+            }
+            bytesRead += count;
+        }
         
-        // Read the complete message body
+        // Convert bytes to int
+        int totalLength = ((lengthBytes[0] & 0xFF) << 24) |
+                         ((lengthBytes[1] & 0xFF) << 16) |
+                         ((lengthBytes[2] & 0xFF) << 8) |
+                         (lengthBytes[3] & 0xFF);
+        
+        if (totalLength <= 0 || totalLength > 100_000_000) { // 100MB sanity check
+            throw new IOException("Invalid message length: " + totalLength);
+        }
+        
+        // Read the complete message body - handle fragmentation
         byte[] messageBody = new byte[totalLength];
-        dis.readFully(messageBody);
+        bytesRead = 0;
+        while (bytesRead < totalLength) {
+            int count = dis.read(messageBody, bytesRead, totalLength - bytesRead);
+            if (count == -1) {
+                throw new IOException("Stream closed while reading message body");
+            }
+            bytesRead += count;
+        }
         
         // Unpack the message
         return unpack(messageBody);

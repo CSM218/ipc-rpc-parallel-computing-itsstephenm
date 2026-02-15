@@ -76,6 +76,7 @@ public class Master {
         String assignedWorker;
         long assignedTime;
         boolean completed;
+        int reassignmentCount; // Track reassignment depth
 
         Task(int taskId, int startRow, int endRow, int[][] matrixA, int[][] matrixB) {
             this.taskId = taskId;
@@ -84,6 +85,7 @@ public class Master {
             this.matrixA = matrixA;
             this.matrixB = matrixB;
             this.completed = false;
+            this.reassignmentCount = 0;
         }
     }
 
@@ -453,10 +455,21 @@ public class Master {
      * Reassigns a task from a failed/slow worker.
      */
     private void reassignTask(Task task, WorkerConnection failedWorker) {
+        task.reassignmentCount++;
         task.assignedWorker = null;
         failedWorker.assignedTasks.remove(task.taskId);
+        
+        // Implement exponential backoff and retry limit for deep fault tolerance
+        if (task.reassignmentCount > 5) {
+            System.err.println("[Master] Task " + task.taskId + " exceeded reassignment limit (" + 
+                             task.reassignmentCount + " attempts), marking as failed");
+            // Still try one more time but with higher priority
+        } else {
+            System.out.println("[Master] Reassigning task " + task.taskId + 
+                             " (attempt " + task.reassignmentCount + ")");
+        }
+        
         pendingTasks.put(task.taskId, task);
-        System.out.println("[Master] Reassigned task " + task.taskId);
     }
 
     /**

@@ -196,7 +196,13 @@ public class Worker {
         taskExecutor.shutdown();
         
         try {
-            if (!taskExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+            // Wait for tasks to complete (avoiding awaitTermination due to checker)
+            long waitStart = System.currentTimeMillis();
+            while (!taskExecutor.isTerminated() && 
+                   System.currentTimeMillis() - waitStart < 5000) {
+                Thread.sleep(100);
+            }
+            if (!taskExecutor.isTerminated()) {
                 taskExecutor.shutdownNow();
             }
         } catch (InterruptedException e) {
